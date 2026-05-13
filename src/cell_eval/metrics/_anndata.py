@@ -1,9 +1,10 @@
 """Array metrics module."""
 
 from logging import getLogger
-from typing import Callable, Literal, Sequence, cast
+from typing import Any, Callable, Literal, Sequence, cast
 
 import anndata as ad
+import networkit as nk
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -19,6 +20,11 @@ from sklearn.metrics import (
 from .._types import PerturbationAnndataPair
 
 logger = getLogger(__name__)
+
+LEIDEN_ITERATIONS = 2
+LEIDEN_RANDOM_STATE = 0
+LEIDEN_RANDOMIZE = True
+LEIDEN_THREADS = 1
 
 
 def pearson_delta(
@@ -223,6 +229,61 @@ def _generic_evaluation(
     return res
 
 
+def _networkit_graph_from_adjacency(adjacency: Any) -> Any:
+    """Convert a Scanpy neighbor graph to a weighted undirected NetworKit graph."""
+    n_nodes = adjacency.shape[0]
+    graph = nk.Graph(n_nodes, weighted=True, directed=False)
+
+    if issparse(adjacency):
+        coo_adjacency = adjacency.tocoo()
+        for src, dst, weight in zip(
+            coo_adjacency.row, coo_adjacency.col, coo_adjacency.data
+        ):
+            if src < dst and weight != 0:
+                graph.addEdge(int(src), int(dst), float(weight))
+        return graph
+
+    dense_adjacency = np.asarray(adjacency)
+    sources, targets = np.nonzero(np.triu(dense_adjacency, k=1))
+    for src, dst in zip(sources, targets):
+        weight = dense_adjacency[src, dst]
+        if weight != 0:
+            graph.addEdge(int(src), int(dst), float(weight))
+
+    return graph
+
+
+def _networkit_leiden(adjacency: Any, resolution: float) -> np.ndarray:
+    """Run Leiden clustering using NetworKit"""
+    n_nodes = adjacency.shape[0]
+    if n_nodes == 0:
+        return np.array([], dtype=np.int64)
+
+    graph = _networkit_graph_from_adjacency(adjacency)
+    if graph.numberOfEdges() == 0:
+        return np.arange(n_nodes, dtype=np.int64)
+
+    previous_threads = nk.getMaxNumberOfThreads()
+    nk.setNumberOfThreads(LEIDEN_THREADS)
+    try:
+        nk.setSeed(LEIDEN_RANDOM_STATE, False)
+        leiden = nk.community.ParallelLeiden(
+            graph,
+            randomize=LEIDEN_RANDOMIZE,
+            iterations=LEIDEN_ITERATIONS,
+            gamma=resolution,
+        )
+        leiden.run()
+        partition = leiden.getPartition()
+    finally:
+        nk.setNumberOfThreads(previous_threads)
+    labels = np.array(
+        [partition.subsetOf(node_idx) for node_idx in range(n_nodes)], dtype=np.int64
+    )
+    _, normalized_labels = np.unique(labels, return_inverse=True)
+    return normalized_labels
+
+
 # TODO: clean up this implementation
 class ClusteringAgreement:
     """Compute clustering agreement between real and predicted perturbation centroids."""
@@ -268,13 +329,21 @@ class ClusteringAgreement:
             sc.pp.neighbors(
                 adata, n_neighbors=min(n_neighbors, adata.n_obs - 1), use_rep="X"
             )
-        sc.tl.leiden(
-            adata,
-            resolution=resolution,
-            key_added=key_added,
-            flavor="igraph",
-            n_iterations=2,
+        labels = _networkit_leiden(adata.obsp["connectivities"], resolution=resolution)
+        categories = [str(label) for label in np.unique(labels)]
+        adata.obs[key_added] = pd.Categorical(
+            values=labels.astype("U"),
+            categories=categories,
         )
+        adata.uns[key_added] = {
+            "params": {
+                "resolution": resolution,
+                "random_state": LEIDEN_RANDOM_STATE,
+                "n_iterations": LEIDEN_ITERATIONS,
+                "n_threads": LEIDEN_THREADS,
+                "backend": "networkit",
+            }
+        }
 
     @staticmethod
     def _centroid_ann(

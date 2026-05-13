@@ -8,6 +8,14 @@ This package provides a comprehensive suite of metrics for evaluating the perfor
 
 Distribution with [`uv`](https://docs.astral.sh/uv/)
 
+If you are installing on Python 3.14, install native build tools first. NetworKit
+does not currently publish Python 3.14 wheels, so `uv` builds it from source.
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install cmake make g++
+```
+
 ```bash
 # install from pypi
 uv pip install -U cell-eval
