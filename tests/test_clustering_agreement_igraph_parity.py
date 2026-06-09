@@ -1,3 +1,5 @@
+from typing import cast
+
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -16,11 +18,9 @@ class IgraphReferenceClusteringAgreement(ClusteringAgreement):
     def _cluster_leiden(
         adata: ad.AnnData,
         resolution: float,
-        key_added: str,
         n_neighbors: int = 15,
-    ) -> None:
-        if key_added in adata.obs:
-            return
+    ) -> np.ndarray:
+        key_added = "_igraph_reference_clusters"
         if "neighbors" not in adata.uns:
             sc.pp.neighbors(
                 adata, n_neighbors=min(n_neighbors, adata.n_obs - 1), use_rep="X"
@@ -33,6 +33,12 @@ class IgraphReferenceClusteringAgreement(ClusteringAgreement):
             n_iterations=2,
             random_state=0,
         )
+        obs = cast(pd.DataFrame, adata.obs)
+        labels = pd.Categorical(obs[key_added]).codes
+        del obs[key_added]
+        if key_added in adata.uns:
+            del adata.uns[key_added]
+        return labels
 
 
 PERT_COL = "perturbation"

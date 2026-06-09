@@ -234,6 +234,11 @@ def _networkit_graph_from_adjacency(adjacency: Any) -> Any:
     n_nodes = adjacency.shape[0]
     graph = nk.Graph(n_nodes, weighted=True, directed=False)
 
+    # Keep explicit insertion instead of GraphFromCoo: with NetworKit 11.2.1,
+    # SciPy sparse matrices in coordinate format produced unit weights locally,
+    # while tuple input segfaulted under Python 3.14/SciPy 1.17. Only adding
+    # edges whose source node index is smaller than the target node index avoids
+    # duplicate undirected edges from Scanpy's symmetric connectivity matrix.
     if issparse(adjacency):
         coo_adjacency = adjacency.tocoo()
         for src, dst, weight in zip(
@@ -320,30 +325,22 @@ class ClusteringAgreement:
     def _cluster_leiden(
         adata: ad.AnnData,
         resolution: float,
-        key_added: str,
         n_neighbors: int = 15,
-    ) -> None:
-        if key_added in adata.obs:
-            return
+    ) -> np.ndarray:
         if "neighbors" not in adata.uns:
             sc.pp.neighbors(
                 adata, n_neighbors=min(n_neighbors, adata.n_obs - 1), use_rep="X"
             )
-        labels = _networkit_leiden(adata.obsp["connectivities"], resolution=resolution)
-        categories = [str(label) for label in np.unique(labels)]
-        adata.obs[key_added] = pd.Categorical(
-            values=labels.astype("U"),
-            categories=categories,
-        )
-        adata.uns[key_added] = {
-            "params": {
-                "resolution": resolution,
-                "random_state": LEIDEN_RANDOM_STATE,
-                "n_iterations": LEIDEN_ITERATIONS,
-                "n_threads": LEIDEN_THREADS,
-                "backend": "networkit",
-            }
-        }
+        return _networkit_leiden(adata.obsp["connectivities"], resolution=resolution)
+
+    @staticmethod
+    def _labels_by_category(
+        adata: ad.AnnData,
+        category_key: str,
+        labels: np.ndarray,
+    ) -> pd.Series:
+        obs = cast(pd.DataFrame, adata.obs)
+        return pd.Series(labels, index=pd.Index(obs[category_key], name=category_key))
 
     @staticmethod
     def _centroid_ann(
@@ -394,29 +391,31 @@ class ClusteringAgreement:
         )
 
         # 3. cluster real once
-        real_key = "real_clusters"
-        self._cluster_leiden(
-            ad_real_cent, self.real_resolution, real_key, self.n_neighbors
-        )
-        ad_real_cent.obs = (
-            cast(pd.DataFrame, ad_real_cent.obs)
-            .set_index(data.pert_col)
+        real_labels = (
+            self._labels_by_category(
+                ad_real_cent,
+                data.pert_col,
+                self._cluster_leiden(
+                    ad_real_cent, self.real_resolution, self.n_neighbors
+                ),
+            )
             .loc[cats_sorted]
+            .to_numpy()
         )
-        real_labels = pd.Categorical(ad_real_cent.obs[real_key])
 
         # 4. sweep predicted resolutions
         best_score = 0.0
-        ad_pred_cent.obs = (
-            cast(pd.DataFrame, ad_pred_cent.obs)
-            .set_index(data.pert_col)
-            .loc[cats_sorted]
-        )
         for r in self.pred_resolutions:
-            pred_key = f"pred_clusters_{r}"
-            self._cluster_leiden(ad_pred_cent, r, pred_key, self.n_neighbors)
-            pred_labels = pd.Categorical(ad_pred_cent.obs[pred_key])
-            score = self._score(real_labels, pred_labels, self.metric)  # type: ignore
+            pred_labels = (
+                self._labels_by_category(
+                    ad_pred_cent,
+                    data.pert_col,
+                    self._cluster_leiden(ad_pred_cent, r, self.n_neighbors),
+                )
+                .loc[cats_sorted]
+                .to_numpy()
+            )
+            score = self._score(real_labels, pred_labels, self.metric)
             best_score = max(best_score, score)
 
         return float(best_score)
