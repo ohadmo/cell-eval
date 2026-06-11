@@ -119,7 +119,7 @@ class MetricsEvaluator:
 
     def compute(
         self,
-        profile: Literal["full", "vcc", "minimal", "de", "anndata"] = "full",
+        profile: Literal["full", "vcc", "minimal", "de", "anndata", "pds"] = "full",
         metric_configs: dict[str, dict[str, Any]] | None = None,
         skip_metrics: list[str] | None = None,
         basename: str = "results.csv",

@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._gsea_nes import GSEANESSpearman
 from ._registry import MetricRegistry
 
 metrics_registry = MetricRegistry()
@@ -153,6 +154,15 @@ metrics_registry.register(
     description="Computes ROC AUC for significant recovery",
     best_value=MetricBestValue.ONE,
     func=compute_roc_auc,
+)
+
+metrics_registry.register(
+    name="gsea_nes_spearman",
+    metric_type=MetricType.DE,
+    description="Bounded Spearman agreement between real and predicted pathway-level GSEA NES",
+    best_value=MetricBestValue.ONE,
+    func=GSEANESSpearman,  # type: ignore
+    is_class=True,
 )
 
 metrics_registry.register(

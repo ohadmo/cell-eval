@@ -4,7 +4,12 @@ import logging
 import os
 
 from .. import KNOWN_PROFILES
-from ._const import DEFAULT_CTRL, DEFAULT_OUTDIR, DEFAULT_PERT_COL
+from ._const import (
+    DEFAULT_CTRL,
+    DEFAULT_GSEA_GENE_SETS,
+    DEFAULT_OUTDIR,
+    DEFAULT_PERT_COL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +97,41 @@ def parse_args_run(parser: ap.ArgumentParser):
         choices=KNOWN_PROFILES,
     )
     parser.add_argument(
+        "--gsea-gene-sets",
+        type=str,
+        default=DEFAULT_GSEA_GENE_SETS,
+        help=(
+            "Gene sets for GSEA metrics. Use 'hallmark' for Decoupler Hallmark, "
+            "or provide a .gmt/CSV/TSV path with source,target columns "
+            "[default: %(default)s]"
+        ),
+    )
+    parser.add_argument(
+        "--gsea-rank-by",
+        type=str,
+        default="log2_fold_change",
+        choices=["log2_fold_change", "signed_pvalue", "signed_fdr"],
+        help="DE statistic used to rank genes for GSEA metrics [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--gsea-times",
+        type=int,
+        default=1000,
+        help="Number of random permutations for GSEA NES normalization; must be > 1 [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--gsea-tmin",
+        type=int,
+        default=5,
+        help="Minimum number of genes per pathway after filtering [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--gsea-seed",
+        type=int,
+        default=42,
+        help="Random seed for GSEA permutations [default: %(default)s]",
+    )
+    parser.add_argument(
         "--skip-metrics",
         type=str,
         help="Metrics to skip (comma-separated for multiple) (see docs for more details)",
@@ -119,18 +159,36 @@ def run_evaluation(args: ap.Namespace):
     from cell_eval import MetricsEvaluator
     from cell_eval.utils import split_anndata_on_celltype
 
-    # Set metric config for embed key if provided
-    metric_kwargs = (
-        {
-            "discrimination_score_l2": {"embed_key": args.embed_key},
-            "discrimination_score_cosine": {"embed_key": args.embed_key},
-            "pearson_edistance": {"n_jobs": args.num_threads},
-        }
-        if args.embed_key is not None
-        else {}
+    skip_metrics = args.skip_metrics.split(",") if args.skip_metrics else None
+
+    # Set metric config for optional metric inputs.
+    metric_kwargs = {}
+    if args.embed_key is not None:
+        metric_kwargs.update(
+            {
+                "discrimination_score_l2": {"embed_key": args.embed_key},
+                "discrimination_score_cosine": {"embed_key": args.embed_key},
+                "pearson_edistance": {"n_jobs": args.num_threads},
+            }
+        )
+
+    gsea_metric_enabled = args.profile == "vcc" and (
+        skip_metrics is None or "gsea_nes_spearman" not in skip_metrics
     )
 
-    skip_metrics = args.skip_metrics.split(",") if args.skip_metrics else None
+    if gsea_metric_enabled:
+        gsea_gene_set_path = (
+            None
+            if args.gsea_gene_sets == DEFAULT_GSEA_GENE_SETS
+            else args.gsea_gene_sets
+        )
+        metric_kwargs["gsea_nes_spearman"] = {
+            "gene_set_path": gsea_gene_set_path,
+            "rank_by": args.gsea_rank_by,
+            "times": args.gsea_times,
+            "tmin": args.gsea_tmin,
+            "seed": args.gsea_seed,
+        }
 
     if args.celltype_col is not None:
         real = ad.read_h5ad(args.adata_real)

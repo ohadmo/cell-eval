@@ -24,6 +24,17 @@ KNOWN_PROFILES: list[Literal["full", "vcc", "minimal", "de", "anndata"]] = [
 ]
 
 
+def _gsea_metric_config(adata) -> dict[str, dict[str, object]]:
+    genes = list(map(str, adata.var_names[:6]))
+    net = pd.DataFrame(
+        {
+            "source": ["set_1", "set_1", "set_2", "set_2", "set_3", "set_3"],
+            "target": genes,
+        }
+    )
+    return {"gsea_nes_spearman": {"net": net, "times": 5, "tmin": 2}}
+
+
 def test_broken_adata_mismatched_var_size():
     adata_real = build_random_anndata(normlog=False)
     adata_pred = adata_real.copy()
@@ -226,6 +237,9 @@ def test_eval_simple_profiles():
     for profile in KNOWN_PROFILES:
         evaluator.compute(
             profile=profile,
+            metric_configs=_gsea_metric_config(adata_real)
+            if profile == "vcc"
+            else None,
             break_on_error=True,
         )
 

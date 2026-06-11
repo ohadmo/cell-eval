@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._gsea_nes import GSEANESSpearman
 from ._impl import metrics_registry
 from .base import Metric, MetricInfo, MetricResult
 
@@ -40,6 +41,7 @@ __all__ = [
     "compute_roc_auc",
     "DESigGenesRecall",
     "DENsigCounts",
+    "GSEANESSpearman",
     # Global registry
     "metrics_registry",
     # Base Classes

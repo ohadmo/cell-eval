@@ -5,3 +5,5 @@ DEFAULT_CELLTYPE_COL = "celltype"
 DEFAULT_NTC_NAME = "non-targeting"
 
 DEFAULT_OUTDIR = "./cell-eval-outdir"
+
+DEFAULT_GSEA_GENE_SETS = "hallmark"

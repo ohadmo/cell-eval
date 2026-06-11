@@ -22,7 +22,10 @@ VCC_METRICS = [
     "mae",
     "discrimination_score_l1",
     "overlap_at_N",
+    "gsea_nes_spearman",
 ]
+
+OPTIONAL_METRICS = {"gsea_nes_spearman"}
 
 KNOWN_PROFILES = [
     "full",
@@ -59,16 +62,12 @@ class MetricPipeline:
 
         match profile:
             case "full":
-                self._metrics.extend(metrics_registry.list_metrics(MetricType.DE))
-                self._metrics.extend(
-                    metrics_registry.list_metrics(MetricType.ANNDATA_PAIR)
-                )
+                self._metrics.extend(_default_metrics(MetricType.DE))
+                self._metrics.extend(_default_metrics(MetricType.ANNDATA_PAIR))
             case "de":
-                self._metrics.extend(metrics_registry.list_metrics(MetricType.DE))
+                self._metrics.extend(_default_metrics(MetricType.DE))
             case "anndata":
-                self._metrics.extend(
-                    metrics_registry.list_metrics(MetricType.ANNDATA_PAIR)
-                )
+                self._metrics.extend(_default_metrics(MetricType.ANNDATA_PAIR))
             case "minimal":
                 self._metrics.extend(MINIMAL_METRICS)
             case "vcc":
@@ -236,3 +235,11 @@ class MetricPipeline:
     def get_agg_results(self) -> pl.DataFrame:
         """Get aggregated results as a DataFrame."""
         return self.get_results().drop("perturbation").describe()
+
+
+def _default_metrics(metric_type: MetricType) -> list[str]:
+    return [
+        metric
+        for metric in metrics_registry.list_metrics(metric_type)
+        if metric not in OPTIONAL_METRICS
+    ]

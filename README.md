@@ -61,6 +61,23 @@ cell-eval run \
     --profile full
 ```
 
+The VCC profile includes `gsea_nes_spearman`, which runs GSEA on real and predicted DE ranks, then compares the pathway-level normalized enrichment scores (NES) per perturbation with bounded Spearman correlation, `(rho + 1) / 2`.
+By default it uses Decoupler's Hallmark gene sets.
+The CLI exposes this as `--gsea-gene-sets hallmark`.
+You can override the gene sets with a GMT file or a CSV/TSV table containing `source,target` columns:
+
+```bash
+cell-eval run \
+    -ap <your/path/to/pred>.h5ad \
+    -ar <your/path/to/real>.h5ad \
+    --profile vcc \
+    --gsea-gene-sets <your/path/to/gene_sets.gmt>
+```
+
+By default GSEA ranks genes by `log2_fold_change` from the DE tables.
+You can also use `--gsea-rank-by signed_pvalue` or `--gsea-rank-by signed_fdr`.
+`--gsea-times` must be greater than 1 so Decoupler returns NES rather than raw enrichment scores.
+
 To run this as a python module you will need to use the `MetricsEvaluator` class.
 
 ```python
