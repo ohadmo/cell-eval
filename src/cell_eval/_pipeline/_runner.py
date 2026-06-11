@@ -23,9 +23,12 @@ VCC_METRICS = [
     "discrimination_score_l1",
     "overlap_at_N",
     "gsea_nes_spearman",
+    "progeny_activity_spearman",
 ]
 
-OPTIONAL_METRICS = {"gsea_nes_spearman"}
+# These metrics are already part of VCC_METRICS. Keep them out of broad default
+# profiles because they depend on external pathway resources unless configured.
+VCC_ONLY_METRICS = {"gsea_nes_spearman", "progeny_activity_spearman"}
 
 KNOWN_PROFILES = [
     "full",
@@ -241,5 +244,5 @@ def _default_metrics(metric_type: MetricType) -> list[str]:
     return [
         metric
         for metric in metrics_registry.list_metrics(metric_type)
-        if metric not in OPTIONAL_METRICS
+        if metric not in VCC_ONLY_METRICS
     ]

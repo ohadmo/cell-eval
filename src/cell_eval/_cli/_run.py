@@ -9,9 +9,28 @@ from ._const import (
     DEFAULT_GSEA_GENE_SETS,
     DEFAULT_OUTDIR,
     DEFAULT_PERT_COL,
+    DEFAULT_PROGENY_LICENSE,
+    DEFAULT_PROGENY_METHOD,
+    DEFAULT_PROGENY_ORGANISM,
+    DEFAULT_PROGENY_THR_PADJ,
+    DEFAULT_PROGENY_TOP,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_progeny_top(value: str) -> int | float:
+    if value.lower() in {"all", "inf", "infinity"}:
+        return float("inf")
+    try:
+        top = int(value)
+    except ValueError as error:
+        raise ap.ArgumentTypeError(
+            "--progeny-top must be a positive integer or one of: all, inf"
+        ) from error
+    if top <= 0:
+        raise ap.ArgumentTypeError("--progeny-top must be greater than 0")
+    return top
 
 
 def parse_args_run(parser: ap.ArgumentParser):
@@ -132,6 +151,51 @@ def parse_args_run(parser: ap.ArgumentParser):
         help="Random seed for GSEA permutations [default: %(default)s]",
     )
     parser.add_argument(
+        "--progeny-method",
+        type=str,
+        default=DEFAULT_PROGENY_METHOD,
+        choices=["ulm", "mlm", "waggr", "zscore"],
+        help="Decoupler method used to infer PROGENy pathway activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-rank-by",
+        type=str,
+        default="log2_fold_change",
+        choices=["log2_fold_change", "signed_pvalue", "signed_fdr"],
+        help="DE statistic used to infer PROGENy pathway activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-organism",
+        type=str,
+        default=DEFAULT_PROGENY_ORGANISM,
+        help="Organism used when loading Decoupler PROGENy [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-top",
+        type=_parse_progeny_top,
+        default=DEFAULT_PROGENY_TOP,
+        help="Top PROGENy genes per pathway, or 'all'/'inf' [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-thr-padj",
+        type=float,
+        default=DEFAULT_PROGENY_THR_PADJ,
+        help="Adjusted p-value threshold for PROGENy interactions [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-license",
+        type=str,
+        default=DEFAULT_PROGENY_LICENSE,
+        choices=["academic", "commercial", "nonprofit"],
+        help="OmniPath license used when loading PROGENy [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--progeny-tmin",
+        type=int,
+        default=5,
+        help="Minimum number of PROGENy target genes per pathway after filtering [default: %(default)s]",
+    )
+    parser.add_argument(
         "--skip-metrics",
         type=str,
         help="Metrics to skip (comma-separated for multiple) (see docs for more details)",
@@ -175,6 +239,9 @@ def run_evaluation(args: ap.Namespace):
     gsea_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "gsea_nes_spearman" not in skip_metrics
     )
+    progeny_metric_enabled = args.profile == "vcc" and (
+        skip_metrics is None or "progeny_activity_spearman" not in skip_metrics
+    )
 
     if gsea_metric_enabled:
         gsea_gene_set_path = (
@@ -188,6 +255,17 @@ def run_evaluation(args: ap.Namespace):
             "times": args.gsea_times,
             "tmin": args.gsea_tmin,
             "seed": args.gsea_seed,
+        }
+
+    if progeny_metric_enabled:
+        metric_kwargs["progeny_activity_spearman"] = {
+            "method": args.progeny_method,
+            "rank_by": args.progeny_rank_by,
+            "organism": args.progeny_organism,
+            "top": args.progeny_top,
+            "thr_padj": args.progeny_thr_padj,
+            "license": args.progeny_license,
+            "tmin": args.progeny_tmin,
         }
 
     if args.celltype_col is not None:

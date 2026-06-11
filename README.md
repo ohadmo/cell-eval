@@ -78,6 +78,10 @@ By default GSEA ranks genes by `log2_fold_change` from the DE tables.
 You can also use `--gsea-rank-by signed_pvalue` or `--gsea-rank-by signed_fdr`.
 `--gsea-times` must be greater than 1 so Decoupler returns NES rather than raw enrichment scores.
 
+The VCC profile also includes `progeny_activity_spearman`, which runs Decoupler PROGENy activity inference on real and predicted DE ranks, then compares the inferred signaling pathway activities per perturbation with bounded Spearman correlation.
+By default it uses `--progeny-method ulm`; `mlm`, `waggr`, and `zscore` are also available for sensitivity checks.
+By default it loads human PROGENy interactions through Decoupler with `--progeny-license commercial`, `--progeny-thr-padj 0.05`, and all significant target genes per pathway.
+
 To run this as a python module you will need to use the `MetricsEvaluator` class.
 
 ```python

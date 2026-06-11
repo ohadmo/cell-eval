@@ -1,5 +1,3 @@
-import argparse as ap
-
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -72,6 +70,7 @@ def test_vcc_profile_runs_gsea_through_pipeline():
         metric_configs={"gsea_nes_spearman": {"net": _net(), "times": 5, "tmin": 2}},
         break_on_error=True,
     )
+    pipeline.skip_metrics("progeny_activity_spearman")
 
     pipeline.compute_de_metrics(comparison)
     results = pipeline.get_results()
@@ -94,7 +93,9 @@ def test_gsea_does_not_add_extra_profiles():
     assert "vcc-gsea" not in KNOWN_PROFILES
 
 
-def test_run_parser_defaults_gsea_gene_sets_to_hallmark():
+def test_run_parser_defaults_gsea_gene_sets():
+    import argparse as ap
+
     parser = ap.ArgumentParser()
     parse_args_run(parser)
 

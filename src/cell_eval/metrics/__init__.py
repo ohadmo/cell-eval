@@ -20,6 +20,7 @@ from ._de import (
     de_overlap_metric,
 )
 from ._gsea_nes import GSEANESSpearman
+from ._progeny import PROGENyActivitySpearman
 from ._impl import metrics_registry
 from .base import Metric, MetricInfo, MetricResult
 
@@ -42,6 +43,7 @@ __all__ = [
     "DESigGenesRecall",
     "DENsigCounts",
     "GSEANESSpearman",
+    "PROGENyActivitySpearman",
     # Global registry
     "metrics_registry",
     # Base Classes

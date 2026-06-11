@@ -20,6 +20,7 @@ from ._de import (
     de_overlap_metric,
 )
 from ._gsea_nes import GSEANESSpearman
+from ._progeny import PROGENyActivitySpearman
 from ._registry import MetricRegistry
 
 metrics_registry = MetricRegistry()
@@ -162,6 +163,15 @@ metrics_registry.register(
     description="Bounded Spearman agreement between real and predicted pathway-level GSEA NES",
     best_value=MetricBestValue.ONE,
     func=GSEANESSpearman,  # type: ignore
+    is_class=True,
+)
+
+metrics_registry.register(
+    name="progeny_activity_spearman",
+    metric_type=MetricType.DE,
+    description="Bounded Spearman agreement between real and predicted PROGENy pathway activities",
+    best_value=MetricBestValue.ONE,
+    func=PROGENyActivitySpearman,  # type: ignore
     is_class=True,
 )
 

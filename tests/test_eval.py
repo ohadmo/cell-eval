@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cell_eval import MetricsEvaluator
+from cell_eval import MetricPipeline, MetricsEvaluator
 from cell_eval.data import (
     CONTROL_VAR,
     PERT_COL,
@@ -24,15 +24,62 @@ KNOWN_PROFILES: list[Literal["full", "vcc", "minimal", "de", "anndata"]] = [
 ]
 
 
-def _gsea_metric_config(adata) -> dict[str, dict[str, object]]:
-    genes = list(map(str, adata.var_names[:6]))
+def _pathway_metric_config(adata) -> dict[str, dict[str, object]]:
+    genes = list(map(str, adata.var_names[:8]))
     net = pd.DataFrame(
         {
-            "source": ["set_1", "set_1", "set_2", "set_2", "set_3", "set_3"],
-            "target": genes,
+            "source": [
+                "set_1",
+                "set_1",
+                "set_1",
+                "set_2",
+                "set_2",
+                "set_2",
+                "set_3",
+                "set_3",
+                "set_3",
+                "set_4",
+                "set_4",
+                "set_4",
+            ],
+            "target": [
+                genes[0],
+                genes[1],
+                genes[6],
+                genes[2],
+                genes[3],
+                genes[6],
+                genes[4],
+                genes[5],
+                genes[7],
+                genes[1],
+                genes[4],
+                genes[7],
+            ],
+            "weight": [
+                1.0,
+                0.8,
+                -0.3,
+                -1.0,
+                -0.8,
+                0.4,
+                1.0,
+                -1.0,
+                0.6,
+                0.5,
+                -0.5,
+                1.0,
+            ],
         }
     )
-    return {"gsea_nes_spearman": {"net": net, "times": 5, "tmin": 2}}
+    return {
+        "gsea_nes_spearman": {
+            "net": net[["source", "target"]],
+            "times": 5,
+            "tmin": 2,
+        },
+        "progeny_activity_spearman": {"net": net, "tmin": 2},
+    }
 
 
 def test_broken_adata_mismatched_var_size():
@@ -237,7 +284,7 @@ def test_eval_simple_profiles():
     for profile in KNOWN_PROFILES:
         evaluator.compute(
             profile=profile,
-            metric_configs=_gsea_metric_config(adata_real)
+            metric_configs=_pathway_metric_config(adata_real)
             if profile == "vcc"
             else None,
             break_on_error=True,
@@ -248,6 +295,16 @@ def test_eval_simple_profiles():
             profile="unknown",  # type: ignore
             break_on_error=True,
         )
+
+
+def test_vcc_profile_includes_pathway_metrics():
+    pathway_metrics = {"gsea_nes_spearman", "progeny_activity_spearman"}
+
+    vcc_pipeline = MetricPipeline(profile="vcc")
+    de_pipeline = MetricPipeline(profile="de")
+
+    assert pathway_metrics.issubset(vcc_pipeline._metrics)
+    assert pathway_metrics.isdisjoint(de_pipeline._metrics)
 
 
 def test_eval_missing_celltype_col():

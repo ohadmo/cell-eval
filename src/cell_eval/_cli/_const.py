@@ -7,3 +7,9 @@ DEFAULT_NTC_NAME = "non-targeting"
 DEFAULT_OUTDIR = "./cell-eval-outdir"
 
 DEFAULT_GSEA_GENE_SETS = "hallmark"
+
+DEFAULT_PROGENY_ORGANISM = "human"
+DEFAULT_PROGENY_TOP = float("inf")
+DEFAULT_PROGENY_THR_PADJ = 0.05
+DEFAULT_PROGENY_LICENSE = "commercial"
+DEFAULT_PROGENY_METHOD = "ulm"
