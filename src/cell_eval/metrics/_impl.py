@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._collectri import CollecTRIActivitySpearman
 from ._dorothea import DoRothEAActivitySpearman
 from ._gsea_nes import GSEANESSpearman
 from ._progeny import PROGENyActivitySpearman
@@ -173,6 +174,15 @@ metrics_registry.register(
     description="Bounded Spearman agreement between real and predicted DoRothEA TF activities",
     best_value=MetricBestValue.ONE,
     func=DoRothEAActivitySpearman,  # type: ignore
+    is_class=True,
+)
+
+metrics_registry.register(
+    name="collectri_activity_spearman",
+    metric_type=MetricType.DE,
+    description="Bounded Spearman agreement between real and predicted CollecTRI TF activities",
+    best_value=MetricBestValue.ONE,
+    func=CollecTRIActivitySpearman,  # type: ignore
     is_class=True,
 )
 

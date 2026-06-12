@@ -4,8 +4,16 @@ import logging
 import os
 
 from .. import KNOWN_PROFILES
-from .._decoupler_methods import DOROTHEA_ACTIVITY_METHODS, PROGENY_ACTIVITY_METHODS
+from .._decoupler_methods import (
+    COLLECTRI_ACTIVITY_METHODS,
+    DOROTHEA_ACTIVITY_METHODS,
+    PROGENY_ACTIVITY_METHODS,
+)
 from ._const import (
+    DEFAULT_COLLECTRI_LICENSE,
+    DEFAULT_COLLECTRI_METHOD,
+    DEFAULT_COLLECTRI_ORGANISM,
+    DEFAULT_COLLECTRI_REMOVE_COMPLEXES,
     DEFAULT_CTRL,
     DEFAULT_DOROTHEA_LEVELS,
     DEFAULT_DOROTHEA_LICENSE,
@@ -210,6 +218,45 @@ def parse_args_run(parser: ap.ArgumentParser):
         help="Minimum number of DoRothEA target genes per regulator after filtering [default: %(default)s]",
     )
     parser.add_argument(
+        "--collectri-method",
+        type=str,
+        default=DEFAULT_COLLECTRI_METHOD,
+        choices=COLLECTRI_ACTIVITY_METHODS,
+        help="Decoupler method used to infer CollecTRI TF activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--collectri-rank-by",
+        type=str,
+        default="log2_fold_change",
+        choices=["log2_fold_change", "signed_pvalue", "signed_fdr"],
+        help="DE statistic used to infer CollecTRI TF activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--collectri-organism",
+        type=str,
+        default=DEFAULT_COLLECTRI_ORGANISM,
+        help="Organism used when loading Decoupler CollecTRI [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--collectri-license",
+        type=str,
+        default=DEFAULT_COLLECTRI_LICENSE,
+        choices=["academic", "commercial", "nonprofit"],
+        help="License argument passed to Decoupler when loading CollecTRI [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--collectri-remove-complexes",
+        action="store_true",
+        default=DEFAULT_COLLECTRI_REMOVE_COMPLEXES,
+        help="Remove AP1/NFKB complex regulators from Decoupler CollecTRI",
+    )
+    parser.add_argument(
+        "--collectri-tmin",
+        type=int,
+        default=5,
+        help="Minimum number of CollecTRI target genes per regulator after filtering [default: %(default)s]",
+    )
+    parser.add_argument(
         "--progeny-method",
         type=str,
         default=DEFAULT_PROGENY_METHOD,
@@ -301,6 +348,9 @@ def run_evaluation(args: ap.Namespace):
     dorothea_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "dorothea_activity_spearman" not in skip_metrics
     )
+    collectri_metric_enabled = args.profile == "vcc" and (
+        skip_metrics is None or "collectri_activity_spearman" not in skip_metrics
+    )
     progeny_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "progeny_activity_spearman" not in skip_metrics
     )
@@ -327,6 +377,16 @@ def run_evaluation(args: ap.Namespace):
             "levels": args.dorothea_levels,
             "license": args.dorothea_license,
             "tmin": args.dorothea_tmin,
+        }
+
+    if collectri_metric_enabled:
+        metric_kwargs["collectri_activity_spearman"] = {
+            "method": args.collectri_method,
+            "rank_by": args.collectri_rank_by,
+            "organism": args.collectri_organism,
+            "remove_complexes": args.collectri_remove_complexes,
+            "license": args.collectri_license,
+            "tmin": args.collectri_tmin,
         }
 
     if progeny_metric_enabled:

@@ -66,7 +66,7 @@ AnnData inputs (predicted + real)
 Metrics are split into two categories registered in `src/cell_eval/metrics/_impl.py`:
 
 - **AnnData metrics** (`_anndata.py`): pearson_delta, mse, mae, mse_delta, mae_delta, discrimination_score, clustering_agreement, edistance
-- **DE metrics** (`_de.py`, `_gsea_nes.py`, `_progeny.py`, `_dorothea.py`): overlap/precision at N, spearman correlations, direction match, significant gene recall, ROC/PR AUC, and VCC-only pathway/regulator metrics for GSEA NES Spearman, PROGENy activity Spearman, and DoRothEA TF activity Spearman
+- **DE metrics** (`_de.py`, `_gsea_nes.py`, `_progeny.py`, `_dorothea.py`, `_collectri.py`): overlap/precision at N, spearman correlations, direction match, significant gene recall, ROC/PR AUC, and VCC-only pathway/regulator metrics for GSEA NES Spearman, PROGENy activity Spearman, DoRothEA TF activity Spearman, and CollecTRI TF activity Spearman
 
 ### CLI
 

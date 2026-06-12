@@ -87,6 +87,10 @@ By default it uses `--dorothea-method viper`, human DoRothEA confidence levels `
 Decoupler treats DoRothEA as a weighted TF-target network that can be scored with `viper`, `ulm`, `mlm`, `waggr`, or `zscore`.
 The metric uses Decoupler's default DoRothEA confidence weighting: `A=1`, `B=2`, `C=3`, `D=4`, so lower-confidence interactions receive weights closer to zero.
 
+The VCC profile also includes `collectri_activity_spearman`, which infers CollecTRI transcription-factor activities from real and predicted DE ranks, then compares TF activity profiles per perturbation with bounded Spearman correlation.
+By default it uses `--collectri-method ulm`, human CollecTRI interactions, and passes `--collectri-license commercial` to Decoupler; `mlm`, `waggr`, and `zscore` are also available for sensitivity checks.
+CollecTRI is an expanded signed TF-target regulon resource, so this metric is a regulator-level complement to DoRothEA rather than a pathway activity score.
+
 To run this as a python module you will need to use the `MetricsEvaluator` class.
 
 ```python

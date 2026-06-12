@@ -5,16 +5,15 @@ import pytest
 
 from cell_eval import MetricPipeline
 from cell_eval._cli._const import (
-    DEFAULT_PROGENY_LICENSE,
-    DEFAULT_PROGENY_METHOD,
-    DEFAULT_PROGENY_ORGANISM,
-    DEFAULT_PROGENY_THR_PADJ,
-    DEFAULT_PROGENY_TOP,
+    DEFAULT_COLLECTRI_LICENSE,
+    DEFAULT_COLLECTRI_METHOD,
+    DEFAULT_COLLECTRI_ORGANISM,
+    DEFAULT_COLLECTRI_REMOVE_COMPLEXES,
 )
 from cell_eval._cli._run import parse_args_run
 from cell_eval._types import initialize_de_comparison
-from cell_eval.metrics import PROGENyActivitySpearman
-from cell_eval.metrics._progeny import PROGENY_ACTIVITY_METHODS, PROGENyMethod
+from cell_eval.metrics import CollecTRIActivitySpearman
+from cell_eval.metrics._collectri import COLLECTRI_ACTIVITY_METHODS, CollecTRIMethod
 
 
 def _de_frame(scale: float = 1.0) -> pl.DataFrame:
@@ -44,18 +43,18 @@ def _net() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "source": [
-                "pathway_1",
-                "pathway_1",
-                "pathway_1",
-                "pathway_2",
-                "pathway_2",
-                "pathway_2",
-                "pathway_3",
-                "pathway_3",
-                "pathway_3",
-                "pathway_4",
-                "pathway_4",
-                "pathway_4",
+                "tf_1",
+                "tf_1",
+                "tf_1",
+                "tf_2",
+                "tf_2",
+                "tf_2",
+                "tf_3",
+                "tf_3",
+                "tf_3",
+                "tf_4",
+                "tf_4",
+                "tf_4",
             ],
             "target": [
                 "g1",
@@ -89,9 +88,9 @@ def _net() -> pd.DataFrame:
     )
 
 
-def test_progeny_activity_spearman_identical_de_is_perfect():
+def test_collectri_activity_spearman_identical_de_is_perfect():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame())
-    metric = PROGENyActivitySpearman(net=_net(), tmin=2)
+    metric = CollecTRIActivitySpearman(net=_net(), tmin=2)
 
     scores = metric(comparison)
 
@@ -99,40 +98,40 @@ def test_progeny_activity_spearman_identical_de_is_perfect():
     assert np.allclose(list(scores.values()), 1.0)
 
 
-def test_progeny_activity_spearman_supports_weighted_activity_methods():
+def test_collectri_activity_spearman_supports_weighted_activity_methods():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame())
-    methods: tuple[PROGENyMethod, ...] = PROGENY_ACTIVITY_METHODS
+    methods: tuple[CollecTRIMethod, ...] = COLLECTRI_ACTIVITY_METHODS
 
     for method in methods:
-        metric = PROGENyActivitySpearman(net=_net(), method=method, tmin=2)
+        metric = CollecTRIActivitySpearman(net=_net(), method=method, tmin=2)
         scores = metric(comparison)
 
         assert np.allclose(list(scores.values()), 1.0)
 
 
-def test_vcc_profile_runs_progeny_through_pipeline():
+def test_vcc_profile_runs_collectri_through_pipeline():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame(scale=-1.0))
     pipeline = MetricPipeline(
         profile="vcc",
-        metric_configs={"progeny_activity_spearman": {"net": _net(), "tmin": 2}},
+        metric_configs={"collectri_activity_spearman": {"net": _net(), "tmin": 2}},
         break_on_error=True,
     )
     pipeline.skip_metrics(
         [
             "gsea_nes_spearman",
             "dorothea_activity_spearman",
-            "collectri_activity_spearman",
+            "progeny_activity_spearman",
         ]
     )
 
     pipeline.compute_de_metrics(comparison)
     results = pipeline.get_results()
 
-    assert "progeny_activity_spearman" in results.columns
+    assert "collectri_activity_spearman" in results.columns
     assert results.shape[0] == 2
 
 
-def test_run_parser_defaults_progeny_resource_options():
+def test_run_parser_defaults_collectri_resource_options():
     import argparse as ap
 
     parser = ap.ArgumentParser()
@@ -147,14 +146,33 @@ def test_run_parser_defaults_progeny_resource_options():
         ]
     )
 
-    assert args.progeny_method == DEFAULT_PROGENY_METHOD
-    assert args.progeny_organism == DEFAULT_PROGENY_ORGANISM
-    assert args.progeny_top == DEFAULT_PROGENY_TOP
-    assert args.progeny_thr_padj == DEFAULT_PROGENY_THR_PADJ
-    assert args.progeny_license == DEFAULT_PROGENY_LICENSE
+    assert args.collectri_method == DEFAULT_COLLECTRI_METHOD
+    assert args.collectri_method == "ulm"
+    assert args.collectri_organism == DEFAULT_COLLECTRI_ORGANISM
+    assert args.collectri_license == DEFAULT_COLLECTRI_LICENSE
+    assert args.collectri_remove_complexes == DEFAULT_COLLECTRI_REMOVE_COMPLEXES
 
 
-def test_run_parser_rejects_viper_for_progeny():
+def test_run_parser_accepts_collectri_remove_complexes():
+    import argparse as ap
+
+    parser = ap.ArgumentParser()
+    parse_args_run(parser)
+
+    args = parser.parse_args(
+        [
+            "--adata-pred",
+            "pred.h5ad",
+            "--adata-real",
+            "real.h5ad",
+            "--collectri-remove-complexes",
+        ]
+    )
+
+    assert args.collectri_remove_complexes is True
+
+
+def test_run_parser_rejects_viper_for_collectri():
     import argparse as ap
 
     parser = ap.ArgumentParser()
@@ -167,7 +185,7 @@ def test_run_parser_rejects_viper_for_progeny():
                 "pred.h5ad",
                 "--adata-real",
                 "real.h5ad",
-                "--progeny-method",
+                "--collectri-method",
                 "viper",
             ]
         )

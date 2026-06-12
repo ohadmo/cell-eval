@@ -110,19 +110,17 @@ def test_dorothea_activity_spearman_supports_weighted_activity_methods():
 
 def test_vcc_profile_runs_dorothea_through_pipeline():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame(scale=-1.0))
-    pathway_config = {
-        "gsea_nes_spearman": {
-            "net": _net()[["source", "target"]],
-            "times": 5,
-            "tmin": 2,
-        },
-        "dorothea_activity_spearman": {"net": _net(), "tmin": 2},
-        "progeny_activity_spearman": {"net": _net(), "tmin": 2},
-    }
     pipeline = MetricPipeline(
         profile="vcc",
-        metric_configs=pathway_config,
+        metric_configs={"dorothea_activity_spearman": {"net": _net(), "tmin": 2}},
         break_on_error=True,
+    )
+    pipeline.skip_metrics(
+        [
+            "gsea_nes_spearman",
+            "collectri_activity_spearman",
+            "progeny_activity_spearman",
+        ]
     )
 
     pipeline.compute_de_metrics(comparison)

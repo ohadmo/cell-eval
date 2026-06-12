@@ -70,7 +70,13 @@ def test_vcc_profile_runs_gsea_through_pipeline():
         metric_configs={"gsea_nes_spearman": {"net": _net(), "times": 5, "tmin": 2}},
         break_on_error=True,
     )
-    pipeline.skip_metrics(["dorothea_activity_spearman", "progeny_activity_spearman"])
+    pipeline.skip_metrics(
+        [
+            "dorothea_activity_spearman",
+            "collectri_activity_spearman",
+            "progeny_activity_spearman",
+        ]
+    )
 
     pipeline.compute_de_metrics(comparison)
     results = pipeline.get_results()

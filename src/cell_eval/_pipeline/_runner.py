@@ -24,6 +24,7 @@ VCC_METRICS = [
     "overlap_at_N",
     "gsea_nes_spearman",
     "dorothea_activity_spearman",
+    "collectri_activity_spearman",
     "progeny_activity_spearman",
 ]
 
@@ -32,6 +33,7 @@ VCC_METRICS = [
 VCC_ONLY_METRICS = {
     "gsea_nes_spearman",
     "dorothea_activity_spearman",
+    "collectri_activity_spearman",
     "progeny_activity_spearman",
 }
 

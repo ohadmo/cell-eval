@@ -17,3 +17,9 @@ PROGENY_ACTIVITY_METHODS = cast(
     tuple[PROGENyMethod, ...],
     get_args(PROGENyMethod),
 )
+
+CollecTRIMethod = Literal["ulm", "mlm", "waggr", "zscore"]
+COLLECTRI_ACTIVITY_METHODS = cast(
+    tuple[CollecTRIMethod, ...],
+    get_args(CollecTRIMethod),
+)
