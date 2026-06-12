@@ -1,9 +1,12 @@
 import logging
 import multiprocessing as mp
 import os
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Literal
 
 import anndata as ad
+import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
@@ -16,6 +19,21 @@ from ._types import PerturbationAnndataPair, initialize_de_comparison
 from .utils import _cast_float16_to_float32
 
 logger = logging.getLogger(__name__)
+
+FeatureNamesInput = os.PathLike[str] | str | Sequence[str]
+
+_FEATURE_NAME_COLUMNS = (
+    "gene_symbol",
+    "gene_symbols",
+    "gene_name",
+    "gene_names",
+    "genesymbol",
+    "feature_name",
+    "feature_names",
+    "feature",
+    "target",
+    "gene",
+)
 
 
 def _available_cpus() -> int:
@@ -79,6 +97,7 @@ class MetricsEvaluator:
         prefix: str | None = None,
         pdex_kwargs: dict[str, Any] | None = None,
         skip_de: bool = False,
+        feature_names: FeatureNamesInput | None = None,
     ):
         # Enable a global string cache for categorical columns
         pl.enable_string_cache()
@@ -92,12 +111,14 @@ class MetricsEvaluator:
             )
         os.makedirs(outdir, exist_ok=True)
 
+        resolved_feature_names = _resolve_feature_names(feature_names)
         self.anndata_pair = _build_anndata_pair(
             real=adata_real,
             pred=adata_pred,
             control_pert=control_pert,
             pert_col=pert_col,
             allow_discrete=allow_discrete,
+            feature_names=resolved_feature_names,
         )
 
         if skip_de:
@@ -112,6 +133,7 @@ class MetricsEvaluator:
                 outdir=outdir,
                 prefix=prefix,
                 pdex_kwargs=pdex_kwargs or {},
+                feature_names=resolved_feature_names,
             )
 
         self.outdir = outdir
@@ -171,6 +193,7 @@ def _build_anndata_pair(
     control_pert: str,
     pert_col: str,
     allow_discrete: bool = False,
+    feature_names: Sequence[str] | None = None,
 ):
     if isinstance(real, str):
         logger.info(f"Reading real anndata from {real}")
@@ -178,6 +201,10 @@ def _build_anndata_pair(
     if isinstance(pred, str):
         logger.info(f"Reading pred anndata from {pred}")
         pred = ad.read_h5ad(pred)
+
+    if feature_names is not None:
+        _apply_feature_names(real, feature_names, which="real")
+        _apply_feature_names(pred, feature_names, which="pred")
 
     # Cast float16 to float32 since NUMBA (used by pdex) does not support float16
     _cast_float16_to_float32(real, which="real")
@@ -229,6 +256,144 @@ def _convert_to_normlog(
     sc.pp.log1p(adata)  # log-transform (log1p)
 
 
+def _resolve_feature_names(
+    feature_names: FeatureNamesInput | None,
+) -> list[str] | None:
+    if feature_names is None:
+        return None
+    if isinstance(feature_names, (str, os.PathLike)):
+        path = os.fspath(feature_names)
+        if not isinstance(path, str):
+            raise TypeError("--feature-names path must resolve to a string path")
+        names = _load_feature_names(path)
+    else:
+        names = list(feature_names)
+    return _validate_feature_names(names)
+
+
+def _load_feature_names(path: str) -> list[str]:
+    feature_path = Path(path)
+    suffix = feature_path.suffix.lower()
+    if suffix == ".npy":
+        array = np.load(feature_path, allow_pickle=True)
+        if array.ndim != 1:
+            raise ValueError(
+                f"--feature-names file must contain a one-dimensional array: {feature_path}"
+            )
+        return [str(value) for value in array.tolist()]
+    if suffix in {".csv", ".tsv"}:
+        sep = "\t" if suffix == ".tsv" else ","
+        return _load_delimited_feature_names(feature_path, sep=sep)
+
+    with open(feature_path) as handle:
+        return [line.strip() for line in handle if line.strip()]
+
+
+def _load_delimited_feature_names(path: Path, sep: str) -> list[str]:
+    frame = pd.read_csv(path, sep=sep)
+    columns_by_normalized_name = {
+        str(column).strip().lower(): column for column in frame.columns
+    }
+    for column_name in _FEATURE_NAME_COLUMNS:
+        if column_name in columns_by_normalized_name:
+            column = columns_by_normalized_name[column_name]
+            return frame[column].astype(str).tolist()
+
+    frame_no_header = pd.read_csv(path, sep=sep, header=None)
+    if frame_no_header.shape[1] == 0:
+        raise ValueError(f"--feature-names file is empty: {path}")
+    if frame_no_header.shape[1] > 1:
+        raise ValueError(
+            "--feature-names delimited files with multiple columns must include "
+            f"one of these columns: {', '.join(_FEATURE_NAME_COLUMNS)}"
+        )
+    return frame_no_header.iloc[:, 0].astype(str).tolist()
+
+
+def _validate_feature_names(names: Sequence[str]) -> list[str]:
+    normalized = ["" if pd.isna(name) else str(name).strip() for name in names]
+    if not normalized:
+        raise ValueError("--feature-names must contain at least one feature name")
+    empty_positions = [idx for idx, name in enumerate(normalized) if not name]
+    if empty_positions:
+        raise ValueError(
+            f"--feature-names contains empty names at positions: {empty_positions[:5]}"
+        )
+    duplicates = pd.Series(normalized).value_counts()
+    duplicates = duplicates[duplicates > 1]
+    if not duplicates.empty:
+        preview = ", ".join(map(str, duplicates.index[:5]))
+        raise ValueError(f"--feature-names contains duplicate names: {preview}")
+    return normalized
+
+
+def _apply_feature_names(
+    adata: ad.AnnData,
+    feature_names: Sequence[str],
+    which: str,
+) -> None:
+    if adata.n_vars != len(feature_names):
+        raise ValueError(
+            f"--feature-names length ({len(feature_names)}) does not match "
+            f"{which} AnnData feature dimension ({adata.n_vars})"
+        )
+    adata.var.index = pd.Index(feature_names, dtype="str")
+
+
+def _maybe_remap_de_features(
+    frame: pl.DataFrame,
+    feature_names: Sequence[str] | None,
+) -> pl.DataFrame:
+    if feature_names is None or "feature" not in frame.columns:
+        return frame
+
+    frame = frame.with_columns(pl.col("feature").cast(pl.Utf8))
+    unique_features = frame.select(pl.col("feature").unique())["feature"].to_list()
+    feature_name_set = set(feature_names)
+    unknown_feature_names = [
+        feature for feature in unique_features if feature not in feature_name_set
+    ]
+    if not unknown_feature_names:
+        return frame
+
+    try:
+        feature_indices = [int(feature) for feature in unique_features]
+    except ValueError as error:
+        preview = ", ".join(map(str, unknown_feature_names[:5]))
+        raise ValueError(
+            "DE feature values do not match --feature-names and are not numeric "
+            f"zero-based feature indices. Examples: {preview}"
+        ) from error
+
+    n_features = len(feature_names)
+    out_of_range = [idx for idx in feature_indices if idx < 0 or idx >= n_features]
+    if out_of_range:
+        raise ValueError(
+            "DE feature indices are outside the range covered by --feature-names. "
+            f"Examples: {out_of_range[:5]}"
+        )
+
+    mapping = pl.DataFrame(
+        {
+            "feature": [str(idx) for idx in range(n_features)],
+            "_cell_eval_feature_name": list(feature_names),
+        }
+    )
+    return (
+        frame.join(mapping, on="feature", how="left")
+        .with_columns(
+            pl.coalesce(["_cell_eval_feature_name", "feature"]).alias("feature")
+        )
+        .drop("_cell_eval_feature_name")
+    )
+
+
+def _ensure_polars_dataframe(frame: pl.DataFrame | pd.DataFrame) -> pl.DataFrame:
+    if isinstance(frame, pd.DataFrame):
+        return pl.from_pandas(frame)
+    return frame
+
+
 def _build_de_comparison(
     anndata_pair: PerturbationAnndataPair | None = None,
     de_pred: pl.DataFrame | str | None = None,
@@ -238,6 +403,7 @@ def _build_de_comparison(
     outdir: str | None = None,
     prefix: str | None = None,
     pdex_kwargs: dict[str, Any] | None = None,
+    feature_names: Sequence[str] | None = None,
 ):
     return initialize_de_comparison(
         real=_load_or_build_de(
@@ -249,6 +415,7 @@ def _build_de_comparison(
             outdir=outdir,
             prefix=prefix,
             pdex_kwargs=pdex_kwargs or {},
+            feature_names=feature_names,
         ),
         pred=_load_or_build_de(
             mode="pred",
@@ -259,6 +426,7 @@ def _build_de_comparison(
             outdir=outdir,
             prefix=prefix,
             pdex_kwargs=pdex_kwargs or {},
+            feature_names=feature_names,
         ),
     )
 
@@ -294,6 +462,7 @@ def _load_or_build_de(
     prefix: str | None = None,
     allow_discrete: bool = False,
     pdex_kwargs: dict[str, Any] | None = None,
+    feature_names: Sequence[str] | None = None,
 ) -> pl.DataFrame:
     if de_path is None:
         if anndata_pair is None:
@@ -307,11 +476,14 @@ def _load_or_build_de(
             pdex_kwargs=pdex_kwargs or {},
         )
         logger.info(f"Using the following pdex kwargs: {pdex_kwargs}")
-        frame = pdex(
-            adata=anndata_pair.real if mode == "real" else anndata_pair.pred,
-            mode="ref",
-            **pdex_kwargs,
+        frame = _ensure_polars_dataframe(
+            pdex(
+                adata=anndata_pair.real if mode == "real" else anndata_pair.pred,
+                mode="ref",
+                **pdex_kwargs,
+            )
         )
+        frame = _maybe_remap_de_features(frame, feature_names)
         if outdir is not None:
             if prefix is not None:
                 prefix = prefix.replace(
@@ -321,25 +493,28 @@ def _load_or_build_de(
             logger.info(f"Writing {mode} DE results to: {pathname}")
             frame.write_csv(os.path.join(outdir, pathname))
 
-        return frame  # type: ignore
+        return frame
     elif isinstance(de_path, str):
         logger.info(f"Reading {mode} DE results from {de_path}")
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return pl.read_csv(
-            de_path,
-            schema_overrides={
-                "target": pl.Utf8,
-                "feature": pl.Utf8,
-            },
+        return _maybe_remap_de_features(
+            pl.read_csv(
+                de_path,
+                schema_overrides={
+                    "target": pl.Utf8,
+                    "feature": pl.Utf8,
+                },
+            ),
+            feature_names,
         )
     elif isinstance(de_path, pl.DataFrame):
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return de_path
+        return _maybe_remap_de_features(de_path, feature_names)
     elif isinstance(de_path, pd.DataFrame):
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return pl.from_pandas(de_path)
+        return _maybe_remap_de_features(pl.from_pandas(de_path), feature_names)
     else:
         raise TypeError(f"Unexpected type for de_path: {type(de_path)}")

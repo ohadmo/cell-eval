@@ -133,6 +133,16 @@ def parse_args_run(parser: ap.ArgumentParser):
         help="Key for embedded data (.obsm) in the AnnData object used in some metrics (evaluated over .X otherwise)",
     )
     parser.add_argument(
+        "--feature-names",
+        type=str,
+        default=None,
+        help=(
+            "Path to ordered feature/gene names matching the AnnData variable axis. "
+            "Applied to AnnData before pdex runs and to numeric DE feature IDs when "
+            "--de-pred/--de-real are provided. Supports .npy, .csv, .tsv, and text files."
+        ),
+    )
+    parser.add_argument(
         "-o",
         "--outdir",
         type=str,
@@ -497,6 +507,7 @@ def run_evaluation(args: ap.Namespace):
                 allow_discrete=args.allow_discrete,
                 prefix=ct,
                 skip_de=args.profile == "pds",
+                feature_names=args.feature_names,
             )
             evaluator.compute(
                 profile=args.profile,
@@ -517,6 +528,7 @@ def run_evaluation(args: ap.Namespace):
             outdir=args.outdir,
             allow_discrete=args.allow_discrete,
             skip_de=args.profile == "pds",
+            feature_names=args.feature_names,
         )
         evaluator.compute(
             profile=args.profile,

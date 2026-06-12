@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 from typing import Literal, cast
 
 import numpy as np
@@ -374,6 +375,82 @@ def test_eval_pdex_kwargs_duplicated():
     evaluator.compute(
         break_on_error=True,
     )
+
+
+def test_feature_names_apply_to_anndata_and_pdex_output(tmp_path: Path):
+    adata_real = build_random_anndata(n_cells=120, n_genes=5, n_perts=2)
+    adata_pred = adata_real.copy()
+    feature_names = np.array(
+        ["GENE_A", "GENE_B", "GENE_C", "GENE_D", "GENE_E"],
+        dtype=object,
+    )
+    feature_names_path = tmp_path / "feature_names.npy"
+    np.save(feature_names_path, feature_names)
+    outdir = tmp_path / "out"
+
+    evaluator = MetricsEvaluator(
+        adata_pred=adata_pred,
+        adata_real=adata_real,
+        control_pert=CONTROL_VAR,
+        pert_col=PERT_COL,
+        outdir=str(outdir),
+        feature_names=str(feature_names_path),
+    )
+
+    assert evaluator.anndata_pair.genes.tolist() == feature_names.tolist()
+    real_de = pd.read_csv(outdir / "real_de.csv")
+    pred_de = pd.read_csv(outdir / "pred_de.csv")
+    assert set(real_de["feature"].astype(str)) == set(feature_names)
+    assert set(pred_de["feature"].astype(str)) == set(feature_names)
+
+
+def test_feature_names_remap_numeric_precomputed_de(tmp_path: Path):
+    adata_real = build_random_anndata(n_cells=80, n_genes=4, n_perts=2)
+    adata_pred = adata_real.copy()
+    feature_names = ["GENE_A", "GENE_B", "GENE_C", "GENE_D"]
+    de = pd.DataFrame(
+        {
+            "target": ["pert_0", "pert_0", "pert_1", "pert_1"],
+            "feature": ["0", "2", "1", "3"],
+            "log2_fold_change": [1.0, -1.0, 0.5, -0.5],
+            "p_value": [0.01, 0.02, 0.03, 0.04],
+            "fdr": [0.01, 0.02, 0.03, 0.04],
+        }
+    )
+    de_real = tmp_path / "real_de.csv"
+    de_pred = tmp_path / "pred_de.csv"
+    de.to_csv(de_real, index=False)
+    de.to_csv(de_pred, index=False)
+
+    evaluator = MetricsEvaluator(
+        adata_pred=adata_pred,
+        adata_real=adata_real,
+        de_pred=str(de_pred),
+        de_real=str(de_real),
+        control_pert=CONTROL_VAR,
+        pert_col=PERT_COL,
+        outdir=str(tmp_path / "out"),
+        feature_names=feature_names,
+    )
+
+    assert evaluator.de_comparison is not None
+    features = evaluator.de_comparison.real.data["feature"].unique().to_list()
+    assert set(features) == {"GENE_A", "GENE_B", "GENE_C", "GENE_D"}
+
+
+def test_feature_names_reject_length_mismatch(tmp_path: Path):
+    adata_real = build_random_anndata(n_cells=80, n_genes=4, n_perts=2)
+    adata_pred = adata_real.copy()
+
+    with pytest.raises(ValueError, match="--feature-names length"):
+        MetricsEvaluator(
+            adata_pred=adata_pred,
+            adata_real=adata_real,
+            control_pert=CONTROL_VAR,
+            pert_col=PERT_COL,
+            outdir=str(tmp_path / "out"),
+            feature_names=["GENE_A", "GENE_B"],
+        )
 
 
 def validate_expected_files(
