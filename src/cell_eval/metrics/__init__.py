@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._dorothea import DoRothEAActivitySpearman
 from ._gsea_nes import GSEANESSpearman
 from ._progeny import PROGENyActivitySpearman
 from ._impl import metrics_registry
@@ -42,6 +43,7 @@ __all__ = [
     "compute_roc_auc",
     "DESigGenesRecall",
     "DENsigCounts",
+    "DoRothEAActivitySpearman",
     "GSEANESSpearman",
     "PROGENyActivitySpearman",
     # Global registry

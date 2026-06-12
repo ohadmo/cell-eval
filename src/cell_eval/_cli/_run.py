@@ -4,8 +4,13 @@ import logging
 import os
 
 from .. import KNOWN_PROFILES
+from .._decoupler_methods import DOROTHEA_ACTIVITY_METHODS, PROGENY_ACTIVITY_METHODS
 from ._const import (
     DEFAULT_CTRL,
+    DEFAULT_DOROTHEA_LEVELS,
+    DEFAULT_DOROTHEA_LICENSE,
+    DEFAULT_DOROTHEA_METHOD,
+    DEFAULT_DOROTHEA_ORGANISM,
     DEFAULT_GSEA_GENE_SETS,
     DEFAULT_OUTDIR,
     DEFAULT_PERT_COL,
@@ -17,6 +22,18 @@ from ._const import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_dorothea_levels(value: str) -> tuple[str, ...]:
+    raw = value.replace(",", " ").split()
+    if len(raw) == 1 and len(raw[0]) > 1:
+        raw = list(raw[0])
+    levels = tuple(level.upper() for level in raw)
+    if not levels or any(level not in {"A", "B", "C", "D"} for level in levels):
+        raise ap.ArgumentTypeError(
+            "--dorothea-levels must contain one or more of: A, B, C, D"
+        )
+    return levels
 
 
 def _parse_progeny_top(value: str) -> int | float:
@@ -151,10 +168,52 @@ def parse_args_run(parser: ap.ArgumentParser):
         help="Random seed for GSEA permutations [default: %(default)s]",
     )
     parser.add_argument(
+        "--dorothea-method",
+        type=str,
+        default=DEFAULT_DOROTHEA_METHOD,
+        choices=DOROTHEA_ACTIVITY_METHODS,
+        help="Decoupler method used to infer DoRothEA TF activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--dorothea-rank-by",
+        type=str,
+        default="log2_fold_change",
+        choices=["log2_fold_change", "signed_pvalue", "signed_fdr"],
+        help="DE statistic used to infer DoRothEA TF activities [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--dorothea-organism",
+        type=str,
+        default=DEFAULT_DOROTHEA_ORGANISM,
+        help="Organism used when loading Decoupler DoRothEA [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--dorothea-levels",
+        type=_parse_dorothea_levels,
+        default=DEFAULT_DOROTHEA_LEVELS,
+        help=(
+            "DoRothEA confidence levels to load, comma-separated or compact "
+            f"[default: {','.join(DEFAULT_DOROTHEA_LEVELS)}]"
+        ),
+    )
+    parser.add_argument(
+        "--dorothea-license",
+        type=str,
+        default=DEFAULT_DOROTHEA_LICENSE,
+        choices=["academic", "commercial", "nonprofit"],
+        help="OmniPath license used when loading DoRothEA [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--dorothea-tmin",
+        type=int,
+        default=5,
+        help="Minimum number of DoRothEA target genes per regulator after filtering [default: %(default)s]",
+    )
+    parser.add_argument(
         "--progeny-method",
         type=str,
         default=DEFAULT_PROGENY_METHOD,
-        choices=["ulm", "mlm", "waggr", "zscore"],
+        choices=PROGENY_ACTIVITY_METHODS,
         help="Decoupler method used to infer PROGENy pathway activities [default: %(default)s]",
     )
     parser.add_argument(
@@ -239,6 +298,9 @@ def run_evaluation(args: ap.Namespace):
     gsea_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "gsea_nes_spearman" not in skip_metrics
     )
+    dorothea_metric_enabled = args.profile == "vcc" and (
+        skip_metrics is None or "dorothea_activity_spearman" not in skip_metrics
+    )
     progeny_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "progeny_activity_spearman" not in skip_metrics
     )
@@ -255,6 +317,16 @@ def run_evaluation(args: ap.Namespace):
             "times": args.gsea_times,
             "tmin": args.gsea_tmin,
             "seed": args.gsea_seed,
+        }
+
+    if dorothea_metric_enabled:
+        metric_kwargs["dorothea_activity_spearman"] = {
+            "method": args.dorothea_method,
+            "rank_by": args.dorothea_rank_by,
+            "organism": args.dorothea_organism,
+            "levels": args.dorothea_levels,
+            "license": args.dorothea_license,
+            "tmin": args.dorothea_tmin,
         }
 
     if progeny_metric_enabled:

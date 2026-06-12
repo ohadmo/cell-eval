@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+from .._decoupler_methods import PROGENY_ACTIVITY_METHODS, PROGENyMethod
 from .._types import DEComparison
 from ._gsea_nes import (
     GSEARankBy,
@@ -15,9 +16,12 @@ from ._gsea_nes import (
     _build_rank_matrix,
     _prepare_mpl_config,
 )
+from ._decoupler_activity import (
+    run_decoupler_activity,
+    validate_decoupler_activity_method,
+)
 
 PROGENyLicense = Literal["academic", "commercial", "nonprofit"]
-PROGENyMethod = Literal["ulm", "mlm", "waggr", "zscore"]
 
 
 class PROGENyActivitySpearman:
@@ -37,9 +41,10 @@ class PROGENyActivitySpearman:
         verbose: bool = False,
     ) -> None:
         self.net = net
-        if method not in {"ulm", "mlm", "waggr", "zscore"}:
-            raise ValueError("PROGENy method must be one of: ulm, mlm, waggr, zscore")
-        self.method = method
+        self.method = validate_decoupler_activity_method(
+            method,
+            PROGENY_ACTIVITY_METHODS,
+        )
         self.rank_by = rank_by
         self.organism = organism
         self.top = top
@@ -68,14 +73,14 @@ class PROGENyActivitySpearman:
                 "No shared DE features found between real and predicted results"
             )
 
-        real_scores = _run_progeny_activity(
+        real_scores = run_decoupler_activity(
             real_rank.loc[:, shared_features],
             net=net,
             method=self.method,
             tmin=self.tmin,
             verbose=self.verbose,
         )
-        pred_scores = _run_progeny_activity(
+        pred_scores = run_decoupler_activity(
             pred_rank.loc[:, shared_features],
             net=net,
             method=self.method,
@@ -150,24 +155,3 @@ def _normalize_progeny_columns(frame: pd.DataFrame) -> pd.DataFrame:
             "synonyms such as pathway/genesymbol"
         )
     return frame
-
-
-def _run_progeny_activity(
-    matrix: pd.DataFrame,
-    net: pd.DataFrame,
-    method: PROGENyMethod,
-    tmin: int,
-    verbose: bool,
-) -> pd.DataFrame:
-    _prepare_mpl_config()
-    import decoupler as dc
-
-    kwargs = {"tval": True} if method in {"ulm", "mlm"} else {}
-    scores, _ = getattr(dc.mt, method)(
-        data=matrix,
-        net=net,
-        tmin=tmin,
-        verbose=verbose,
-        **kwargs,
-    )
-    return scores

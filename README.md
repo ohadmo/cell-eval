@@ -82,6 +82,11 @@ The VCC profile also includes `progeny_activity_spearman`, which runs Decoupler 
 By default it uses `--progeny-method ulm`; `mlm`, `waggr`, and `zscore` are also available for sensitivity checks.
 By default it loads human PROGENy interactions through Decoupler with `--progeny-license commercial`, `--progeny-thr-padj 0.05`, and all significant target genes per pathway.
 
+The VCC profile also includes `dorothea_activity_spearman`, which infers DoRothEA transcription-factor activities from real and predicted DE ranks, then compares TF activity profiles per perturbation with bounded Spearman correlation.
+By default it uses `--dorothea-method viper`, human DoRothEA confidence levels `A,B,C`, and `--dorothea-license commercial`.
+Decoupler treats DoRothEA as a weighted TF-target network that can be scored with `viper`, `ulm`, `mlm`, `waggr`, or `zscore`.
+The metric uses Decoupler's default DoRothEA confidence weighting: `A=1`, `B=2`, `C=3`, `D=4`, so lower-confidence interactions receive weights closer to zero.
+
 To run this as a python module you will need to use the `MetricsEvaluator` class.
 
 ```python

@@ -23,12 +23,17 @@ VCC_METRICS = [
     "discrimination_score_l1",
     "overlap_at_N",
     "gsea_nes_spearman",
+    "dorothea_activity_spearman",
     "progeny_activity_spearman",
 ]
 
 # These metrics are already part of VCC_METRICS. Keep them out of broad default
 # profiles because they depend on external pathway resources unless configured.
-VCC_ONLY_METRICS = {"gsea_nes_spearman", "progeny_activity_spearman"}
+VCC_ONLY_METRICS = {
+    "gsea_nes_spearman",
+    "dorothea_activity_spearman",
+    "progeny_activity_spearman",
+}
 
 KNOWN_PROFILES = [
     "full",

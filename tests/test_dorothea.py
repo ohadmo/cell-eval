@@ -1,20 +1,18 @@
 import numpy as np
 import pandas as pd
 import polars as pl
-import pytest
 
 from cell_eval import MetricPipeline
 from cell_eval._cli._const import (
-    DEFAULT_PROGENY_LICENSE,
-    DEFAULT_PROGENY_METHOD,
-    DEFAULT_PROGENY_ORGANISM,
-    DEFAULT_PROGENY_THR_PADJ,
-    DEFAULT_PROGENY_TOP,
+    DEFAULT_DOROTHEA_LEVELS,
+    DEFAULT_DOROTHEA_LICENSE,
+    DEFAULT_DOROTHEA_METHOD,
+    DEFAULT_DOROTHEA_ORGANISM,
 )
 from cell_eval._cli._run import parse_args_run
 from cell_eval._types import initialize_de_comparison
-from cell_eval.metrics import PROGENyActivitySpearman
-from cell_eval.metrics._progeny import PROGENY_ACTIVITY_METHODS, PROGENyMethod
+from cell_eval.metrics import DoRothEAActivitySpearman
+from cell_eval.metrics._dorothea import DOROTHEA_ACTIVITY_METHODS, DoRothEAMethod
 
 
 def _de_frame(scale: float = 1.0) -> pl.DataFrame:
@@ -44,18 +42,18 @@ def _net() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "source": [
-                "pathway_1",
-                "pathway_1",
-                "pathway_1",
-                "pathway_2",
-                "pathway_2",
-                "pathway_2",
-                "pathway_3",
-                "pathway_3",
-                "pathway_3",
-                "pathway_4",
-                "pathway_4",
-                "pathway_4",
+                "tf_1",
+                "tf_1",
+                "tf_1",
+                "tf_2",
+                "tf_2",
+                "tf_2",
+                "tf_3",
+                "tf_3",
+                "tf_3",
+                "tf_4",
+                "tf_4",
+                "tf_4",
             ],
             "target": [
                 "g1",
@@ -89,9 +87,9 @@ def _net() -> pd.DataFrame:
     )
 
 
-def test_progeny_activity_spearman_identical_de_is_perfect():
+def test_dorothea_activity_spearman_identical_de_is_perfect():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame())
-    metric = PROGENyActivitySpearman(net=_net(), tmin=2)
+    metric = DoRothEAActivitySpearman(net=_net(), tmin=2)
 
     scores = metric(comparison)
 
@@ -99,18 +97,18 @@ def test_progeny_activity_spearman_identical_de_is_perfect():
     assert np.allclose(list(scores.values()), 1.0)
 
 
-def test_progeny_activity_spearman_supports_weighted_activity_methods():
+def test_dorothea_activity_spearman_supports_weighted_activity_methods():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame())
-    methods: tuple[PROGENyMethod, ...] = PROGENY_ACTIVITY_METHODS
+    methods: tuple[DoRothEAMethod, ...] = DOROTHEA_ACTIVITY_METHODS
 
     for method in methods:
-        metric = PROGENyActivitySpearman(net=_net(), method=method, tmin=2)
+        metric = DoRothEAActivitySpearman(net=_net(), method=method, tmin=2)
         scores = metric(comparison)
 
         assert np.allclose(list(scores.values()), 1.0)
 
 
-def test_vcc_profile_runs_progeny_through_pipeline():
+def test_vcc_profile_runs_dorothea_through_pipeline():
     comparison = initialize_de_comparison(real=_de_frame(), pred=_de_frame(scale=-1.0))
     pathway_config = {
         "gsea_nes_spearman": {
@@ -118,6 +116,7 @@ def test_vcc_profile_runs_progeny_through_pipeline():
             "times": 5,
             "tmin": 2,
         },
+        "dorothea_activity_spearman": {"net": _net(), "tmin": 2},
         "progeny_activity_spearman": {"net": _net(), "tmin": 2},
     }
     pipeline = MetricPipeline(
@@ -125,16 +124,15 @@ def test_vcc_profile_runs_progeny_through_pipeline():
         metric_configs=pathway_config,
         break_on_error=True,
     )
-    pipeline.skip_metrics("dorothea_activity_spearman")
 
     pipeline.compute_de_metrics(comparison)
     results = pipeline.get_results()
 
-    assert "progeny_activity_spearman" in results.columns
+    assert "dorothea_activity_spearman" in results.columns
     assert results.shape[0] == 2
 
 
-def test_run_parser_defaults_progeny_resource_options():
+def test_run_parser_defaults_dorothea_resource_options():
     import argparse as ap
 
     parser = ap.ArgumentParser()
@@ -149,27 +147,28 @@ def test_run_parser_defaults_progeny_resource_options():
         ]
     )
 
-    assert args.progeny_method == DEFAULT_PROGENY_METHOD
-    assert args.progeny_organism == DEFAULT_PROGENY_ORGANISM
-    assert args.progeny_top == DEFAULT_PROGENY_TOP
-    assert args.progeny_thr_padj == DEFAULT_PROGENY_THR_PADJ
-    assert args.progeny_license == DEFAULT_PROGENY_LICENSE
+    assert args.dorothea_method == DEFAULT_DOROTHEA_METHOD
+    assert args.dorothea_method == "viper"
+    assert args.dorothea_organism == DEFAULT_DOROTHEA_ORGANISM
+    assert args.dorothea_levels == DEFAULT_DOROTHEA_LEVELS
+    assert args.dorothea_license == DEFAULT_DOROTHEA_LICENSE
 
 
-def test_run_parser_rejects_viper_for_progeny():
+def test_run_parser_accepts_compact_dorothea_levels():
     import argparse as ap
 
     parser = ap.ArgumentParser()
     parse_args_run(parser)
 
-    with pytest.raises(SystemExit):
-        parser.parse_args(
-            [
-                "--adata-pred",
-                "pred.h5ad",
-                "--adata-real",
-                "real.h5ad",
-                "--progeny-method",
-                "viper",
-            ]
-        )
+    args = parser.parse_args(
+        [
+            "--adata-pred",
+            "pred.h5ad",
+            "--adata-real",
+            "real.h5ad",
+            "--dorothea-levels",
+            "AC",
+        ]
+    )
+
+    assert args.dorothea_levels == ("A", "C")
