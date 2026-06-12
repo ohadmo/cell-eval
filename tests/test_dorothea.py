@@ -118,6 +118,7 @@ def test_vcc_profile_runs_dorothea_through_pipeline():
     pipeline.skip_metrics(
         [
             "gsea_nes_spearman",
+            "aucell_auc_spearman",
             "collectri_activity_spearman",
             "progeny_activity_spearman",
         ]

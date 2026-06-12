@@ -78,6 +78,11 @@ def _pathway_metric_config(adata) -> dict[str, dict[str, object]]:
             "times": 5,
             "tmin": 2,
         },
+        "aucell_auc_spearman": {
+            "net": net[["source", "target"]],
+            "n_up": 3,
+            "tmin": 2,
+        },
         "dorothea_activity_spearman": {"net": net, "tmin": 2},
         "collectri_activity_spearman": {"net": net, "tmin": 2},
         "progeny_activity_spearman": {"net": net, "tmin": 2},
@@ -302,6 +307,7 @@ def test_eval_simple_profiles():
 def test_vcc_profile_includes_pathway_metrics():
     pathway_metrics = {
         "gsea_nes_spearman",
+        "aucell_auc_spearman",
         "dorothea_activity_spearman",
         "collectri_activity_spearman",
         "progeny_activity_spearman",

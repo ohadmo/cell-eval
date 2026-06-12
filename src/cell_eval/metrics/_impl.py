@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._aucell_auc import AUCellAUCSpearman
 from ._collectri import CollecTRIActivitySpearman
 from ._dorothea import DoRothEAActivitySpearman
 from ._gsea_nes import GSEANESSpearman
@@ -157,6 +158,15 @@ metrics_registry.register(
     description="Computes ROC AUC for significant recovery",
     best_value=MetricBestValue.ONE,
     func=compute_roc_auc,
+)
+
+metrics_registry.register(
+    name="aucell_auc_spearman",
+    metric_type=MetricType.DE,
+    description="Bounded Spearman agreement between real and predicted AUCell gene-set AUCs",
+    best_value=MetricBestValue.ONE,
+    func=AUCellAUCSpearman,  # type: ignore
+    is_class=True,
 )
 
 metrics_registry.register(

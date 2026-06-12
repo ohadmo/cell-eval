@@ -72,6 +72,7 @@ def test_vcc_profile_runs_gsea_through_pipeline():
     )
     pipeline.skip_metrics(
         [
+            "aucell_auc_spearman",
             "dorothea_activity_spearman",
             "collectri_activity_spearman",
             "progeny_activity_spearman",

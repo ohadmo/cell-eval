@@ -23,6 +23,7 @@ VCC_METRICS = [
     "discrimination_score_l1",
     "overlap_at_N",
     "gsea_nes_spearman",
+    "aucell_auc_spearman",
     "dorothea_activity_spearman",
     "collectri_activity_spearman",
     "progeny_activity_spearman",
@@ -32,6 +33,7 @@ VCC_METRICS = [
 # profiles because they depend on external pathway resources unless configured.
 VCC_ONLY_METRICS = {
     "gsea_nes_spearman",
+    "aucell_auc_spearman",
     "dorothea_activity_spearman",
     "collectri_activity_spearman",
     "progeny_activity_spearman",

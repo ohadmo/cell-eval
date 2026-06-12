@@ -10,6 +10,9 @@ from .._decoupler_methods import (
     PROGENY_ACTIVITY_METHODS,
 )
 from ._const import (
+    DEFAULT_AUCELL_DIRECTION,
+    DEFAULT_AUCELL_GENE_SETS,
+    DEFAULT_AUCELL_N_UP,
     DEFAULT_COLLECTRI_LICENSE,
     DEFAULT_COLLECTRI_METHOD,
     DEFAULT_COLLECTRI_ORGANISM,
@@ -30,6 +33,20 @@ from ._const import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_aucell_n_up(value: str) -> int | None:
+    if value.lower() in {"auto", "none", "default"}:
+        return None
+    try:
+        n_up = int(value)
+    except ValueError as error:
+        raise ap.ArgumentTypeError(
+            "--aucell-n-up must be a positive integer greater than 1, or auto"
+        ) from error
+    if n_up <= 1:
+        raise ap.ArgumentTypeError("--aucell-n-up must be greater than 1, or auto")
+    return n_up
 
 
 def _parse_dorothea_levels(value: str) -> tuple[str, ...]:
@@ -174,6 +191,42 @@ def parse_args_run(parser: ap.ArgumentParser):
         type=int,
         default=42,
         help="Random seed for GSEA permutations [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--aucell-gene-sets",
+        type=str,
+        default=DEFAULT_AUCELL_GENE_SETS,
+        help=(
+            "Gene sets for AUCell metrics. Use 'hallmark' for Decoupler Hallmark, "
+            "or provide a .gmt/CSV/TSV path with source,target columns "
+            "[default: %(default)s]"
+        ),
+    )
+    parser.add_argument(
+        "--aucell-rank-by",
+        type=str,
+        default="log2_fold_change",
+        choices=["log2_fold_change", "signed_pvalue", "signed_fdr"],
+        help="DE statistic used to rank genes for AUCell metrics [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--aucell-n-up",
+        type=_parse_aucell_n_up,
+        default=DEFAULT_AUCELL_N_UP,
+        help="Top-ranked genes used by AUCell, or auto for Decoupler's top 5%% default [default: auto]",
+    )
+    parser.add_argument(
+        "--aucell-direction",
+        type=str,
+        default=DEFAULT_AUCELL_DIRECTION,
+        choices=["up", "down", "both"],
+        help="Whether AUCell scores upregulated, downregulated, or both DE directions [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--aucell-tmin",
+        type=int,
+        default=5,
+        help="Minimum number of genes per AUCell gene set after filtering [default: %(default)s]",
     )
     parser.add_argument(
         "--dorothea-method",
@@ -345,6 +398,9 @@ def run_evaluation(args: ap.Namespace):
     gsea_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "gsea_nes_spearman" not in skip_metrics
     )
+    aucell_metric_enabled = args.profile == "vcc" and (
+        skip_metrics is None or "aucell_auc_spearman" not in skip_metrics
+    )
     dorothea_metric_enabled = args.profile == "vcc" and (
         skip_metrics is None or "dorothea_activity_spearman" not in skip_metrics
     )
@@ -367,6 +423,20 @@ def run_evaluation(args: ap.Namespace):
             "times": args.gsea_times,
             "tmin": args.gsea_tmin,
             "seed": args.gsea_seed,
+        }
+
+    if aucell_metric_enabled:
+        aucell_gene_set_path = (
+            None
+            if args.aucell_gene_sets == DEFAULT_AUCELL_GENE_SETS
+            else args.aucell_gene_sets
+        )
+        metric_kwargs["aucell_auc_spearman"] = {
+            "gene_set_path": aucell_gene_set_path,
+            "rank_by": args.aucell_rank_by,
+            "n_up": args.aucell_n_up,
+            "direction": args.aucell_direction,
+            "tmin": args.aucell_tmin,
         }
 
     if dorothea_metric_enabled:

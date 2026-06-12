@@ -6,6 +6,10 @@ DEFAULT_NTC_NAME = "non-targeting"
 
 DEFAULT_OUTDIR = "./cell-eval-outdir"
 
+DEFAULT_AUCELL_DIRECTION = "both"
+DEFAULT_AUCELL_GENE_SETS = "hallmark"
+DEFAULT_AUCELL_N_UP = None
+
 DEFAULT_GSEA_GENE_SETS = "hallmark"
 
 DEFAULT_COLLECTRI_LICENSE = "commercial"

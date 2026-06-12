@@ -19,6 +19,7 @@ from ._de import (
     compute_roc_auc,
     de_overlap_metric,
 )
+from ._aucell_auc import AUCellAUCSpearman
 from ._collectri import CollecTRIActivitySpearman
 from ._dorothea import DoRothEAActivitySpearman
 from ._gsea_nes import GSEANESSpearman
@@ -44,6 +45,7 @@ __all__ = [
     "compute_roc_auc",
     "DESigGenesRecall",
     "DENsigCounts",
+    "AUCellAUCSpearman",
     "CollecTRIActivitySpearman",
     "DoRothEAActivitySpearman",
     "GSEANESSpearman",

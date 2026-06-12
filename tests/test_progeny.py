@@ -120,6 +120,7 @@ def test_vcc_profile_runs_progeny_through_pipeline():
     pipeline.skip_metrics(
         [
             "gsea_nes_spearman",
+            "aucell_auc_spearman",
             "dorothea_activity_spearman",
             "collectri_activity_spearman",
         ]
