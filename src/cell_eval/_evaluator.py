@@ -7,10 +7,11 @@ import anndata as ad
 import pandas as pd
 import polars as pl
 import scanpy as sc
-from pdex import pdex
 
 from cell_eval.utils import guess_is_lognorm
 
+from ._de_engines import DEMethod, run_de
+from ._de_engines._pdex import build_pdex_kwargs
 from ._pipeline import MetricPipeline
 from ._types import PerturbationAnndataPair, initialize_de_comparison
 from .utils import _cast_float16_to_float32
@@ -63,6 +64,10 @@ class MetricsEvaluator:
     pdex_kwargs: dict[str, Any] | None = None
         Keyword arguments for parallel_differential_expression.
         These will overwrite arguments passed to MetricsEvaluator.__init__ if they conflict.
+    de_method: {"pdex", "memento"} = "pdex"
+        Differential-expression backend to use when DE results are not provided.
+    de_kwargs: dict[str, Any] | None = None
+        Keyword arguments for the selected differential-expression backend.
     """
 
     def __init__(
@@ -78,6 +83,8 @@ class MetricsEvaluator:
         allow_discrete: bool = False,
         prefix: str | None = None,
         pdex_kwargs: dict[str, Any] | None = None,
+        de_method: DEMethod = "pdex",
+        de_kwargs: dict[str, Any] | None = None,
         skip_de: bool = False,
     ):
         # Enable a global string cache for categorical columns
@@ -100,6 +107,12 @@ class MetricsEvaluator:
             allow_discrete=allow_discrete,
         )
 
+        de_kwargs = _resolve_de_kwargs(
+            de_method=de_method,
+            de_kwargs=de_kwargs,
+            pdex_kwargs=pdex_kwargs,
+        )
+
         if skip_de:
             self.de_comparison = None
         else:
@@ -111,7 +124,8 @@ class MetricsEvaluator:
                 allow_discrete=allow_discrete,
                 outdir=outdir,
                 prefix=prefix,
-                pdex_kwargs=pdex_kwargs or {},
+                de_method=de_method,
+                de_kwargs=de_kwargs,
             )
 
         self.outdir = outdir
@@ -237,7 +251,8 @@ def _build_de_comparison(
     allow_discrete: bool = False,
     outdir: str | None = None,
     prefix: str | None = None,
-    pdex_kwargs: dict[str, Any] | None = None,
+    de_method: DEMethod = "pdex",
+    de_kwargs: dict[str, Any] | None = None,
 ):
     return initialize_de_comparison(
         real=_load_or_build_de(
@@ -248,7 +263,8 @@ def _build_de_comparison(
             allow_discrete=allow_discrete,
             outdir=outdir,
             prefix=prefix,
-            pdex_kwargs=pdex_kwargs or {},
+            de_method=de_method,
+            de_kwargs=de_kwargs or {},
         ),
         pred=_load_or_build_de(
             mode="pred",
@@ -258,7 +274,8 @@ def _build_de_comparison(
             allow_discrete=allow_discrete,
             outdir=outdir,
             prefix=prefix,
-            pdex_kwargs=pdex_kwargs or {},
+            de_method=de_method,
+            de_kwargs=de_kwargs or {},
         ),
     )
 
@@ -270,19 +287,30 @@ def _build_pdex_kwargs(
     allow_discrete: bool,
     pdex_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    pdex_kwargs = pdex_kwargs or {}
-    if "reference" not in pdex_kwargs:
-        pdex_kwargs["reference"] = reference
-    if "groupby" not in pdex_kwargs:
-        pdex_kwargs["groupby"] = groupby
-    if "threads" not in pdex_kwargs:
-        pdex_kwargs["threads"] = threads
-    if "is_log1p" not in pdex_kwargs:
-        if allow_discrete:
-            pdex_kwargs["is_log1p"] = False
-        else:
-            pdex_kwargs["is_log1p"] = True
-    return pdex_kwargs
+    return build_pdex_kwargs(
+        reference=reference,
+        groupby=groupby,
+        threads=threads,
+        allow_discrete=allow_discrete,
+        kwargs=pdex_kwargs,
+    )
+
+
+def _resolve_de_kwargs(
+    *,
+    de_method: DEMethod,
+    de_kwargs: dict[str, Any] | None,
+    pdex_kwargs: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if de_method not in ("pdex", "memento"):
+        raise ValueError(f"Unsupported DE method: {de_method}")
+    if de_kwargs is not None and pdex_kwargs is not None:
+        raise ValueError("Pass only one of `de_kwargs` or legacy `pdex_kwargs`.")
+    if pdex_kwargs is not None:
+        if de_method != "pdex":
+            raise ValueError("`pdex_kwargs` can only be used with de_method='pdex'.")
+        return dict(pdex_kwargs)
+    return dict(de_kwargs or {})
 
 
 def _load_or_build_de(
@@ -293,24 +321,23 @@ def _load_or_build_de(
     outdir: str | None = None,
     prefix: str | None = None,
     allow_discrete: bool = False,
-    pdex_kwargs: dict[str, Any] | None = None,
+    de_method: DEMethod = "pdex",
+    de_kwargs: dict[str, Any] | None = None,
 ) -> pl.DataFrame:
     if de_path is None:
         if anndata_pair is None:
             raise ValueError("anndata_pair must be provided if de_path is not provided")
         logger.info(f"Computing DE for {mode} data")
-        pdex_kwargs = _build_pdex_kwargs(
+        de_kwargs = dict(de_kwargs or {})
+        logger.info("Using %s DE backend with kwargs: %s", de_method, de_kwargs)
+        frame = run_de(
+            method=de_method,
+            adata=anndata_pair.real if mode == "real" else anndata_pair.pred,
             reference=anndata_pair.control_pert,
             groupby=anndata_pair.pert_col,
             threads=num_threads,
             allow_discrete=allow_discrete,
-            pdex_kwargs=pdex_kwargs or {},
-        )
-        logger.info(f"Using the following pdex kwargs: {pdex_kwargs}")
-        frame = pdex(
-            adata=anndata_pair.real if mode == "real" else anndata_pair.pred,
-            mode="ref",
-            **pdex_kwargs,
+            kwargs=de_kwargs,
         )
         if outdir is not None:
             if prefix is not None:
@@ -321,11 +348,11 @@ def _load_or_build_de(
             logger.info(f"Writing {mode} DE results to: {pathname}")
             frame.write_csv(os.path.join(outdir, pathname))
 
-        return frame  # type: ignore
+        return frame
     elif isinstance(de_path, str):
         logger.info(f"Reading {mode} DE results from {de_path}")
-        if pdex_kwargs:
-            logger.warning("pdex_kwargs are ignored when reading from a CSV file")
+        if de_kwargs:
+            logger.warning("DE backend kwargs are ignored when reading from a CSV file")
         return pl.read_csv(
             de_path,
             schema_overrides={
@@ -334,12 +361,12 @@ def _load_or_build_de(
             },
         )
     elif isinstance(de_path, pl.DataFrame):
-        if pdex_kwargs:
-            logger.warning("pdex_kwargs are ignored when reading from a CSV file")
+        if de_kwargs:
+            logger.warning("DE backend kwargs are ignored when using provided DE data")
         return de_path
     elif isinstance(de_path, pd.DataFrame):
-        if pdex_kwargs:
-            logger.warning("pdex_kwargs are ignored when reading from a CSV file")
+        if de_kwargs:
+            logger.warning("DE backend kwargs are ignored when using provided DE data")
         return pl.from_pandas(de_path)
     else:
         raise TypeError(f"Unexpected type for de_path: {type(de_path)}")

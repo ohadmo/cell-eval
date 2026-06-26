@@ -111,8 +111,6 @@ class DEResults:
         self.data = self.data.with_columns(
             [pl.col(c).cast(pl.Float32) for c in numeric_cols]
             + [pl.col(c).cast(pl.Categorical) for c in categorical_cols]
-        ).drop(
-            [c for c in self.data.columns if c not in numeric_cols + categorical_cols]
         )
 
     def get_perts(self) -> NDArray[np.str_]:

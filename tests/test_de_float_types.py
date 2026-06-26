@@ -49,3 +49,22 @@ def test_de_results_preserves_negative_log2_fold_change() -> None:
     abs_lfc = de.data["abs_log2_fold_change"].cast(pl.Float64).to_list()
     assert lfc == [-1.0, 0.0, 1.0, 2.0]
     assert abs_lfc == [1.0, 0.0, 1.0, 2.0]
+
+
+def test_de_results_preserves_backend_specific_columns() -> None:
+    df = pl.DataFrame(
+        {
+            "target": ["p", "p"],
+            "feature": ["g1", "g2"],
+            "log2_fold_change": [1.0, -1.0],
+            "p_value": [0.01, 0.2],
+            "fdr": [0.02, 0.2],
+            "dv_coef": [0.5, -0.5],
+            "dv_pval": [0.03, 0.5],
+            "dv_fdr": [0.06, 0.5],
+        }
+    )
+
+    de = DEResults(df, name="real")
+
+    assert {"dv_coef", "dv_pval", "dv_fdr"}.issubset(de.data.columns)

@@ -20,6 +20,11 @@ dependencies = [
     "anndata>=0.12.10",
 ]
 
+[project.optional-dependencies]
+memento = [
+    "memento-de>=0.1.2",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

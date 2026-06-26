@@ -85,6 +85,68 @@ def parse_args_run(parser: ap.ArgumentParser):
         help="Allow discrete data to be evaluated (usually expected to be norm-logged inputs)",
     )
     parser.add_argument(
+        "--de-method",
+        type=str,
+        default="pdex",
+        choices=["pdex", "memento"],
+        help="Differential-expression backend to use when DE results are not provided [default: %(default)s]",
+    )
+    parser.add_argument(
+        "--counts-layer",
+        type=str,
+        help="AnnData layer containing raw counts for Memento. Defaults to .X if omitted.",
+    )
+    parser.add_argument(
+        "--input-is-log1p",
+        action="store_true",
+        help="For Memento only: convert log1p expression back with expm1 before analysis. Prefer --counts-layer with raw counts when available.",
+    )
+    parser.add_argument(
+        "--capture-rate",
+        type=float,
+        help="For Memento only: constant capture rate q in (0, 1).",
+    )
+    parser.add_argument(
+        "--capture-rate-col",
+        type=str,
+        help="For Memento only: obs column containing per-cell capture rates q in (0, 1).",
+    )
+    parser.add_argument(
+        "--memento-num-boot",
+        type=int,
+        help="For Memento only: number of bootstrap samples [default: Memento adapter default]",
+    )
+    parser.add_argument(
+        "--memento-replicate-cols",
+        type=str,
+        help="For Memento only: comma-separated obs columns used as replicate labels.",
+    )
+    parser.add_argument(
+        "--memento-covariate-cols",
+        type=str,
+        help="For Memento only: comma-separated obs columns used as covariates.",
+    )
+    parser.add_argument(
+        "--memento-gene-list",
+        type=str,
+        help="For Memento only: comma-separated genes to test. Defaults to all genes retained by Memento filtering.",
+    )
+    parser.add_argument(
+        "--memento-filter-mean-thresh",
+        type=float,
+        help="For Memento only: mean-expression filter threshold [default: Memento adapter default]",
+    )
+    parser.add_argument(
+        "--memento-min-cell-count",
+        type=int,
+        help="For Memento only: minimum cells required per group [default: Memento adapter default]",
+    )
+    parser.add_argument(
+        "--memento-min-perc-group",
+        type=float,
+        help="For Memento only: minimum fraction of groups where a gene must be expressed [default: Memento adapter default]",
+    )
+    parser.add_argument(
         "--profile",
         type=str,
         default="full",
@@ -131,6 +193,7 @@ def run_evaluation(args: ap.Namespace):
     )
 
     skip_metrics = args.skip_metrics.split(",") if args.skip_metrics else None
+    de_kwargs = _build_de_kwargs(args)
 
     if args.celltype_col is not None:
         real = ad.read_h5ad(args.adata_real)
@@ -158,6 +221,8 @@ def run_evaluation(args: ap.Namespace):
                 outdir=args.outdir,
                 allow_discrete=args.allow_discrete,
                 prefix=ct,
+                de_method=args.de_method,
+                de_kwargs=de_kwargs,
                 skip_de=args.profile == "pds",
             )
             evaluator.compute(
@@ -178,6 +243,8 @@ def run_evaluation(args: ap.Namespace):
             num_threads=args.num_threads,
             outdir=args.outdir,
             allow_discrete=args.allow_discrete,
+            de_method=args.de_method,
+            de_kwargs=de_kwargs,
             skip_de=args.profile == "pds",
         )
         evaluator.compute(
@@ -186,3 +253,37 @@ def run_evaluation(args: ap.Namespace):
             skip_metrics=skip_metrics,
             basename="results.csv",
         )
+
+
+def _build_de_kwargs(args: ap.Namespace) -> dict[str, object]:
+    if args.de_method != "memento":
+        return {}
+
+    should_compute_de = args.de_pred is None or args.de_real is None
+    if (
+        should_compute_de
+        and args.capture_rate is None
+        and args.capture_rate_col is None
+    ):
+        raise ValueError(
+            "Memento requires --capture-rate or --capture-rate-col when DE is computed."
+        )
+
+    de_kwargs: dict[str, object] = {}
+    optional_args = {
+        "counts_layer": args.counts_layer,
+        "input_is_log1p": args.input_is_log1p,
+        "capture_rate": args.capture_rate,
+        "capture_rate_col": args.capture_rate_col,
+        "num_boot": args.memento_num_boot,
+        "replicate_cols": args.memento_replicate_cols,
+        "covariate_cols": args.memento_covariate_cols,
+        "gene_list": args.memento_gene_list,
+        "filter_mean_thresh": args.memento_filter_mean_thresh,
+        "min_cell_count": args.memento_min_cell_count,
+        "min_perc_group": args.memento_min_perc_group,
+    }
+    for key, value in optional_args.items():
+        if value is not None:
+            de_kwargs[key] = value
+    return de_kwargs
